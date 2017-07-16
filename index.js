@@ -3,6 +3,7 @@ var AbstractLevelDOWN = require('abstract-leveldown').AbstractLevelDOWN
 var inherits          = require('util').inherits
 var EventEmitter      = require('events').EventEmitter
 var Cache             = require('lru-cache')
+var NOT_FOUND         = new Error('NotFound')
 var defaultLeveldown
 
 function CacheDOWN (location, leveldown) {
@@ -18,6 +19,7 @@ function CacheDOWN (location, leveldown) {
   leveldown = leveldown || defaultLeveldown
   this._down = new leveldown(location)
   this._cache = new Cache()
+  this._notFound = new Cache()
   ;['_open', '_close', '_iterator'].forEach(function (method) {
     if (method in self._down) {
       self[method] = self._down[method].bind(self._down)
@@ -52,10 +54,21 @@ CacheDOWN.prototype._get = function (key, options, callback) {
     return process.nextTick(function () {
       callback(null, val)
     })
+  } else if (this._notFound.has(key)) {
+    var err = this._notFound.get(key)
+    return process.nextTick(function () {
+      callback(err)
+    })
   }
 
   return this._down._get(key, options, function (err, val) {
-    if (err) return callback(err)
+    if (err) {
+      if (err.notFound || err.message === 'NotFound') {
+        self._notFound.set(key, err)
+      }
+
+      return callback(err)
+    }
 
     self._cachePut(key, val)
     callback(err, val)
@@ -95,6 +108,7 @@ CacheDOWN.prototype.clearCache = function () {
 
 CacheDOWN.prototype._cachePut = function (key, value) {
   this._cache.set(key, value)
+  this._notFound.del(key)
 }
 
 CacheDOWN.prototype._cacheGet = function (key) {

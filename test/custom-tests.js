@@ -184,4 +184,60 @@ module.exports.all = function (leveldown, tape, testCommon) {
       });
     });
   });
+
+  tape('test cache NotFound errors', function (t) {
+    t.plan(12)
+    var db = levelup('notfounderr', {db: leveldown});
+    db.get('a', function (err) {
+      // 1
+      t.ok(err)
+      var get = leveldown._down._get
+      leveldown._down._get = function (key, opts, callback) {
+        // 2
+        t.fail('should not have been called')
+        callback(err)
+      }
+
+      db.get('a', function (err) {
+        // 3
+        t.ok(err)
+        db.put('a', 'b', function (err) {
+          // 4
+          t.error(err)
+          leveldown._down._get = function (key, opts, callback) {
+            // 5
+            t.pass('error cache invalidated on put')
+            get(key, opts, callback)
+          }
+
+          db.get('a', function (err, val) {
+            // 6
+            t.error(err)
+            // 7
+            t.equal(val, 'b')
+            db.del('a', function (err) {
+              // 8
+              t.error(err)
+              db.batch({ type: 'put', key: 'a', value: 'c' }, function (err) {
+                // 9
+                t.error(err)
+                leveldown._down._get = function (key, opts, callback) {
+                  // 10
+                  t.fail('should have used cache')
+                  callback(null, 'c')
+                }
+
+                db.get('a', function (err, value) {
+                  // 11
+                  t.error(err)
+                  // 12
+                  t.equal(value, 'b')
+                })
+              })
+            })
+          })
+        })
+      })
+    })
+  })
 };

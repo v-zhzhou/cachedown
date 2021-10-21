@@ -6,6 +6,10 @@
   "scripts": {
     "test": "node test/test"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pgmemk/cachedown.git"
+  },
   "author": "Mark Vayngrib <mark.vayngrib@lablz.com> (http://github.com/mvayngrib)",
   "license": "MIT",
   "dependencies": {
